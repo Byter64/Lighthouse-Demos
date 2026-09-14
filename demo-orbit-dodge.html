@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orbit Dodge</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #fff; background: #050816; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .hud { position: fixed; inset: 20px 20px auto; display: flex; justify-content: space-between; pointer-events: none; }
+    .score { font-size: clamp(1rem, 3vw, 1.4rem); font-weight: 800; }
+    .help { color: #b9c5e8; text-align: right; }
+    .back { position: fixed; left: 20px; bottom: 20px; color: #78f3cb; text-decoration: none; }
+    .back:focus-visible { outline: 2px solid #78f3cb; outline-offset: 4px; }
+  </style>
+</head>
+<body>
+  <canvas id="game" aria-label="Orbit Dodge game"></canvas>
+  <div class="hud"><div class="score">SCORE <span id="score">0</span></div><div class="help">Hold &larr; / &rarr; or touch a side<br>Press Space to restart</div></div>
+  <a class="back" href="index.html">&larr; All demos</a>
+  <script>
+    const canvas = document.querySelector('#game');
+    const ctx = canvas.getContext('2d');
+    const scoreNode = document.querySelector('#score');
+    let width, height, cx, cy, radius, angle, alive, score, last, spawnClock, rocks;
+    const keys = { left: false, right: false };
+
+    function resize() {
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      width = innerWidth; height = innerHeight;
+      canvas.width = width * dpr; canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cx = width / 2; cy = height / 2; radius = Math.min(width, height) * .22;
+    }
+
+    function reset() {
+      angle = -Math.PI / 2; alive = true; score = 0; last = performance.now(); spawnClock = 0; rocks = [];
+      scoreNode.textContent = '0';
+    }
+
+    function spawnRock() {
+      const a = Math.random() * Math.PI * 2;
+      const distance = Math.max(width, height) * .7;
+      rocks.push({ x: cx + Math.cos(a) * distance, y: cy + Math.sin(a) * distance, size: 9 + Math.random() * 13, speed: 85 + score * 1.1 });
+    }
+
+    function update(dt) {
+      if (!alive) return;
+      const direction = Number(keys.right) - Number(keys.left);
+      angle += direction * dt * 2.7;
+      score += dt * 10;
+      scoreNode.textContent = Math.floor(score);
+      spawnClock -= dt;
+      if (spawnClock <= 0) { spawnRock(); spawnClock = Math.max(.28, 1.05 - score / 280); }
+      const px = cx + Math.cos(angle) * radius;
+      const py = cy + Math.sin(angle) * radius;
+      for (const rock of rocks) {
+        const dx = cx - rock.x, dy = cy - rock.y, distance = Math.hypot(dx, dy) || 1;
+        rock.x += dx / distance * rock.speed * dt;
+        rock.y += dy / distance * rock.speed * dt;
+        if (Math.hypot(px - rock.x, py - rock.y) < rock.size + 8) alive = false;
+      }
+      rocks = rocks.filter(rock => Math.hypot(cx - rock.x, cy - rock.y) > 18);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2.8);
+      glow.addColorStop(0, '#1e3a66'); glow.addColorStop(1, '#050816');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
+      ctx.strokeStyle = '#263458'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#4a65a0'; ctx.beginPath(); ctx.arc(cx, cy, radius * .38, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#78f3cb'; ctx.beginPath(); ctx.arc(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, 8, 0, Math.PI * 2); ctx.fill();
+      for (const rock of rocks) { ctx.fillStyle = '#ff7e72'; ctx.beginPath(); ctx.arc(rock.x, rock.y, rock.size, 0, Math.PI * 2); ctx.fill(); }
+      if (!alive) {
+        ctx.fillStyle = 'rgba(5,8,22,.72)'; ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '800 34px ui-monospace, monospace'; ctx.fillText('ORBIT LOST', cx, cy - 8);
+        ctx.fillStyle = '#b9c5e8'; ctx.font = '16px ui-monospace, monospace'; ctx.fillText('Press Space or tap to restart', cx, cy + 28);
+      }
+    }
+
+    function frame(now) { const dt = Math.min((now - last) / 1000, .04); last = now; update(dt); draw(); requestAnimationFrame(frame); }
+    addEventListener('resize', resize);
+    addEventListener('keydown', event => {
+      if (event.key === 'ArrowLeft') keys.left = true;
+      if (event.key === 'ArrowRight') keys.right = true;
+      if (event.code === 'Space' && !alive) reset();
+    });
+    addEventListener('keyup', event => { if (event.key === 'ArrowLeft') keys.left = false; if (event.key === 'ArrowRight') keys.right = false; });
+    canvas.addEventListener('pointerdown', event => { if (!alive) return reset(); keys[event.clientX < width / 2 ? 'left' : 'right'] = true; });
+    canvas.addEventListener('pointerup', () => { keys.left = keys.right = false; });
+    canvas.addEventListener('pointercancel', () => { keys.left = keys.right = false; });
+    resize(); reset(); requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
